@@ -6,7 +6,7 @@ import (
 )
 
 type Pooler interface {
-	Create() (*ConnHandler, error)
+	Create(pool *ConnHandlerPool) (*ConnHandler, error)
 	Remove(conn *ConnHandler)
 	IsActive(conn *ConnHandler) bool
 }
@@ -28,7 +28,7 @@ func (connPool *ConnHandlerPool) Get() (*ConnHandler, error) {
 	defer connPool.mu.Unlock()
 	for {
 		if len(connPool.conns) == 0 {
-			conn, err := connPool.Pooler.Create()
+			conn, err := connPool.Pooler.Create(connPool)
 			log.Println("create connection: ", conn, err)
 			if err != nil {
 				return nil, err

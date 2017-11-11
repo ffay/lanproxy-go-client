@@ -8,7 +8,7 @@ Download precompiled [Releases](https://github.com/ffay/lanproxy/releases).
 ```
 ./client_darwin_amd64 -s SERVER_IP -p SERVER_PORT -k CLIENT_KEY
 ```
-> eg: nohup ./client_darwin_amd64 -s 127.0.0.1 -p 4900 -k 01c1e176d6ee466c8db717a8 &
+> eg: nohup ./client_darwin_amd64 -s lp.thingsglobal.org -p 4900 -k 01c1e176d6ee466c8db717a8 &
 
 ### Install from source
 

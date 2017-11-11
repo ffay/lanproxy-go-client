@@ -176,6 +176,7 @@ func (messageHandler *LPMessageHandler) MessageReceived(connHandler *ConnHandler
 			realServerMessageHandler := &RealServerMessageHandler{LpConnHandler: connHandler, ConnPool: messageHandler.connPool, UserId: message.Uri, ClientKey: messageHandler.clientKey}
 			conn, err := net.Dial("tcp", addr)
 			if err != nil {
+				log.Println("connect realserver failed", err)
 				realServerMessageHandler.ConnFailed()
 			} else {
 				connHandler := &ConnHandler{}
@@ -189,7 +190,12 @@ func (messageHandler *LPMessageHandler) MessageReceived(connHandler *ConnHandler
 		}
 	case TYPE_DISCONNECT:
 		if connHandler.NextConn != nil {
-			connHandler.NextConn.conn.Close()
+			if connHandler.NextConn != nil {
+				connHandler.NextConn.conn.Close()
+			}
+		}
+		if messageHandler.clientKey == "" {
+			messageHandler.connPool.Return(connHandler)
 		}
 	}
 }
@@ -225,13 +231,13 @@ func (messageHandler *LPMessageHandler) startHeartbeat() {
 	}()
 }
 
-func (pooler *ProxyConnPooler) Create() (*ConnHandler, error) {
+func (pooler *ProxyConnPooler) Create(pool *ConnHandlerPool) (*ConnHandler, error) {
 	conn, err := net.Dial("tcp", pooler.addr)
 	if err != nil {
 		log.Println("Error dialing", err.Error())
 		return nil, err
 	} else {
-		messageHandler := LPMessageHandler{}
+		messageHandler := LPMessageHandler{connPool: pool}
 		connHandler := &ConnHandler{}
 		connHandler.Active = true
 		connHandler.conn = conn

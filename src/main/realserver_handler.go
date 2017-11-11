@@ -57,7 +57,6 @@ func (messageHandler *RealServerMessageHandler) ConnError(connHandler *ConnHandl
 		message.Uri = messageHandler.UserId
 		conn.Write(message)
 		conn.NextConn = nil
-		messageHandler.ConnPool.Return(conn)
 	}
 }
 
