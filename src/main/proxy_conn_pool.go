@@ -24,8 +24,6 @@ func (connPool *ConnHandlerPool) Init() {
 }
 
 func (connPool *ConnHandlerPool) Get() (*ConnHandler, error) {
-	connPool.mu.Lock()
-	defer connPool.mu.Unlock()
 	for {
 		if len(connPool.conns) == 0 {
 			conn, err := connPool.Pooler.Create(connPool)
@@ -36,13 +34,24 @@ func (connPool *ConnHandlerPool) Get() (*ConnHandler, error) {
 
 			return conn, nil
 		} else {
-			conn := connPool.conns[len(connPool.conns)-1]
-			connPool.conns = connPool.conns[:len(connPool.conns)-1]
-			if connPool.Pooler.IsActive(conn) {
-				log.Println("get connection from pool: ", conn)
-				return conn, nil
+			conn, err := connPool.getConn()
+			if conn != nil {
+				return conn, err
 			}
 		}
+	}
+}
+
+func (connPool *ConnHandlerPool) getConn() (*ConnHandler, error) {
+	connPool.mu.Lock()
+	defer connPool.mu.Unlock()
+	conn := connPool.conns[len(connPool.conns)-1]
+	connPool.conns = connPool.conns[:len(connPool.conns)-1]
+	if connPool.Pooler.IsActive(conn) {
+		log.Println("get connection from pool: ", conn)
+		return conn, nil
+	} else {
+		return nil, nil
 	}
 }
 
