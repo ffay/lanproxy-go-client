@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"net"
 )
 
@@ -21,6 +22,12 @@ type ConnHandler struct {
 }
 
 func (connHandler *ConnHandler) Listen(conn net.Conn, messageHandler interface{}) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Printf("run time panic: %v", err)
+			connHandler.messageHandler.ConnError(connHandler)
+		}
+	}()
 	if conn == nil {
 		return
 	}

@@ -69,7 +69,7 @@ func main() {
 		},
 		cli.StringFlag{
 			Name:  "s",
-			Value: "127.0.0.1",
+			Value: "",
 			Usage: "proxy server host",
 		},
 		cli.IntFlag{
@@ -79,6 +79,16 @@ func main() {
 		}}
 	app.Usage = "help you expose a local server behind a NAT or firewall to the internet"
 	app.Action = func(c *cli.Context) error {
+		if c.String("s") == "" {
+			log.Println("server ip addr is required, use -s")
+			log.Println("exit")
+			return nil
+		}
+		if c.String("k") == "" {
+			log.Println("clientkey is required, use -k")
+			log.Println("exit")
+			return nil
+		}
 		log.Println("server addr:", c.String("s"))
 		log.Println("server port:", c.Int("p"))
 		start(c.String("k"), c.String("s"), c.Int("p"))
