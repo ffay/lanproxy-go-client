@@ -45,6 +45,9 @@ func (connPool *ConnHandlerPool) Get() (*ConnHandler, error) {
 func (connPool *ConnHandlerPool) getConn() (*ConnHandler, error) {
 	connPool.mu.Lock()
 	defer connPool.mu.Unlock()
+	if len(connPool.conns) == 0 {
+		return nil, nil
+	}
 	conn := connPool.conns[len(connPool.conns)-1]
 	connPool.conns = connPool.conns[:len(connPool.conns)-1]
 	if connPool.Pooler.IsActive(conn) {

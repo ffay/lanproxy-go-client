@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net"
+	"runtime/debug"
 )
 
 type MessageHandler interface {
@@ -25,6 +26,7 @@ func (connHandler *ConnHandler) Listen(conn net.Conn, messageHandler interface{}
 	defer func() {
 		if err := recover(); err != nil {
 			log.Printf("run time panic: %v", err)
+			debug.PrintStack()
 			connHandler.messageHandler.ConnError(connHandler)
 		}
 	}()
