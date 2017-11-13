@@ -1,8 +1,11 @@
 package main
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/binary"
 	"github.com/urfave/cli"
+	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -55,6 +58,7 @@ type Message struct {
 
 type ProxyConnPooler struct {
 	addr string
+	conf *tls.Config
 }
 
 func main() {
@@ -76,6 +80,14 @@ func main() {
 			Name:  "p",
 			Value: 4900,
 			Usage: "proxy server port",
+		}, cli.StringFlag{
+			Name:  "ssl",
+			Value: "false",
+			Usage: "enable ssl",
+		}, cli.StringFlag{
+			Name:  "cer",
+			Value: "",
+			Usage: "ssl cert path, default skip verify certificate",
 		}}
 	app.Usage = "help you expose a local server behind a NAT or firewall to the internet"
 	app.Action = func(c *cli.Context) error {
@@ -89,22 +101,50 @@ func main() {
 			log.Println("exit")
 			return nil
 		}
+		log.Println("client key:", c.String("k"))
 		log.Println("server addr:", c.String("s"))
 		log.Println("server port:", c.Int("p"))
-		start(c.String("k"), c.String("s"), c.Int("p"))
+		log.Println("enable ssl:", c.String("ssl"))
+		cerPath := c.String("cer")
+		if c.String("cer") == "" {
+			cerPath = "certificate path is null, skip verify certificate"
+		}
+		log.Println("ssl cer path:", cerPath)
+		var conf *tls.Config
+		if c.String("ssl") == "true" {
+			skipVerify := false
+			if c.String("cer") == "" {
+				skipVerify = true
+			}
+			conf = &tls.Config{
+				InsecureSkipVerify: skipVerify,
+			}
+
+			if c.String("cer") != "" {
+				cert, err := ioutil.ReadFile(c.String("cer"))
+				if err != nil {
+					log.Fatalf("Couldn't load file", err)
+					return nil
+				}
+				certPool := x509.NewCertPool()
+				certPool.AppendCertsFromPEM(cert)
+				conf.ClientCAs = certPool
+			}
+		}
+		start(c.String("k"), c.String("s"), c.Int("p"), conf)
 		return nil
 	}
 
 	app.Run(os.Args)
 }
 
-func start(key string, ip string, port int) {
-	connPool := &ConnHandlerPool{Size: 100, Pooler: &ProxyConnPooler{addr: ip + ":" + strconv.Itoa(port)}}
+func start(key string, ip string, port int, conf *tls.Config) {
+	connPool := &ConnHandlerPool{Size: 100, Pooler: &ProxyConnPooler{addr: ip + ":" + strconv.Itoa(port), conf: conf}}
 	connPool.Init()
 	connHandler := &ConnHandler{}
 	for {
 		//cmd connection
-		conn := connect(key, ip, port)
+		conn := connect(key, ip, port, conf)
 		connHandler.conn = conn
 		messageHandler := LPMessageHandler{connPool: connPool}
 		messageHandler.connHandler = connHandler
@@ -115,10 +155,16 @@ func start(key string, ip string, port int) {
 	}
 }
 
-func connect(key string, ip string, port int) net.Conn {
+func connect(key string, ip string, port int, conf *tls.Config) net.Conn {
 	for {
+		var conn net.Conn
+		var err error
 		p := strconv.Itoa(port)
-		conn, err := net.Dial("tcp", ip+":"+p)
+		if conf != nil {
+			conn, err = tls.Dial("tcp", ip+":"+p, conf)
+		} else {
+			conn, err = net.Dial("tcp", ip+":"+p)
+		}
 		if err != nil {
 			log.Println("Error dialing", err.Error())
 			time.Sleep(time.Second * 3)
@@ -232,7 +278,14 @@ func (messageHandler *LPMessageHandler) startHeartbeat() {
 }
 
 func (pooler *ProxyConnPooler) Create(pool *ConnHandlerPool) (*ConnHandler, error) {
-	conn, err := net.Dial("tcp", pooler.addr)
+	var conn net.Conn
+	var err error
+	if pooler.conf != nil {
+		conn, err = tls.Dial("tcp", pooler.addr, pooler.conf)
+	} else {
+		conn, err = net.Dial("tcp", pooler.addr)
+	}
+
 	if err != nil {
 		log.Println("Error dialing", err.Error())
 		return nil, err
