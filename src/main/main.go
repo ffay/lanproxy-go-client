@@ -40,6 +40,9 @@ const (
 	SERIAL_NUMBER_SIZE = 8
 
 	URI_LENGTH_SIZE = 1
+
+	//心跳周期，服务器端空闲连接如果60秒没有数据上报就会关闭连接
+	HEARTBEAT_INTERVAL = 30
 )
 
 type LPMessageHandler struct {
@@ -236,9 +239,9 @@ func (messageHandler *LPMessageHandler) MessageReceived(connHandler *ConnHandler
 		}
 	case TYPE_DISCONNECT:
 		if connHandler.NextConn != nil {
-			if connHandler.NextConn != nil {
-				connHandler.NextConn.conn.Close()
-			}
+			connHandler.NextConn.NextConn = nil
+			connHandler.NextConn.conn.Close()
+			connHandler.NextConn = nil
 		}
 		if messageHandler.clientKey == "" {
 			messageHandler.connPool.Return(connHandler)
@@ -267,7 +270,7 @@ func (messageHandler *LPMessageHandler) startHeartbeat() {
 	go func() {
 		for {
 			select {
-			case <-time.After(time.Second * 5):
+			case <-time.After(time.Second * HEARTBEAT_INTERVAL):
 				msg := Message{Type: TYPE_HEARTBEAT}
 				messageHandler.connHandler.Write(msg)
 			case <-messageHandler.die:
@@ -296,7 +299,6 @@ func (pooler *ProxyConnPooler) Create(pool *ConnHandlerPool) (*ConnHandler, erro
 		connHandler.conn = conn
 		connHandler.messageHandler = interface{}(&messageHandler).(MessageHandler)
 		messageHandler.connHandler = connHandler
-		messageHandler.startHeartbeat()
 		go func() {
 			connHandler.Listen(conn, &messageHandler)
 		}()

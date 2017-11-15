@@ -4,6 +4,7 @@ import (
 	"log"
 	"net"
 	"runtime/debug"
+	"time"
 )
 
 type MessageHandler interface {
@@ -15,6 +16,9 @@ type MessageHandler interface {
 }
 
 type ConnHandler struct {
+	HbChan         chan struct{}
+	ReadTime       int64
+	WriteTime      int64
 	Active         bool
 	NextConn       *ConnHandler
 	conn           net.Conn
@@ -49,6 +53,7 @@ func (connHandler *ConnHandler) Listen(conn net.Conn, messageHandler interface{}
 			connHandler.messageHandler.ConnError(connHandler)
 			break
 		}
+		connHandler.ReadTime = time.Now().Unix()
 		if connHandler.readBuf == nil {
 			connHandler.readBuf = buf[0:n]
 		} else {
@@ -78,5 +83,6 @@ func (connHandler *ConnHandler) Listen(conn net.Conn, messageHandler interface{}
 
 func (connHandler *ConnHandler) Write(msg interface{}) {
 	buf := connHandler.messageHandler.Encode(msg)
+	connHandler.WriteTime = time.Now().Unix()
 	connHandler.conn.Write(buf)
 }

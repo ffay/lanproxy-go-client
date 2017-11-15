@@ -33,9 +33,10 @@ func (messageHandler *RealServerMessageHandler) MessageReceived(connHandler *Con
 }
 
 func (messageHandler *RealServerMessageHandler) ConnSuccess(connHandler *ConnHandler) {
+	log.Println("get proxy connection:", messageHandler.UserId)
 	proxyConnHandler, err := messageHandler.ConnPool.Get()
 	if err != nil {
-		log.Println(err)
+		log.Println("get proxy connection err:", err, "uri:", messageHandler.UserId)
 		message := Message{Type: TYPE_DISCONNECT}
 		message.Uri = messageHandler.UserId
 		messageHandler.LpConnHandler.Write(message)
