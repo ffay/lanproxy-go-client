@@ -260,7 +260,9 @@ func (messageHandler *LPMessageHandler) ConnSuccess(connHandler *ConnHandler) {
 
 func (messageHandler *LPMessageHandler) ConnError(connHandler *ConnHandler) {
 	log.Println("connError:", connHandler)
-	close(messageHandler.die)
+	if messageHandler.die != nil {
+		close(messageHandler.die)
+	}
 	time.Sleep(time.Second * 3)
 }
 
