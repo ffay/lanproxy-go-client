@@ -273,6 +273,11 @@ func (messageHandler *LPMessageHandler) startHeartbeat() {
 		for {
 			select {
 			case <-time.After(time.Second * HEARTBEAT_INTERVAL):
+				if time.Now().Unix()-messageHandler.connHandler.ReadTime >= 2*HEARTBEAT_INTERVAL {
+					log.Println("proxy connection timeout:", messageHandler.connHandler)
+					messageHandler.connHandler.conn.Close()
+					return
+				}
 				msg := Message{Type: TYPE_HEARTBEAT}
 				messageHandler.connHandler.Write(msg)
 			case <-messageHandler.die:
@@ -301,6 +306,7 @@ func (pooler *ProxyConnPooler) Create(pool *ConnHandlerPool) (*ConnHandler, erro
 		connHandler.conn = conn
 		connHandler.messageHandler = interface{}(&messageHandler).(MessageHandler)
 		messageHandler.connHandler = connHandler
+		messageHandler.startHeartbeat()
 		go func() {
 			connHandler.Listen(conn, &messageHandler)
 		}()

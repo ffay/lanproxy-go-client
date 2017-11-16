@@ -16,7 +16,6 @@ type MessageHandler interface {
 }
 
 type ConnHandler struct {
-	HbChan         chan struct{}
 	ReadTime       int64
 	WriteTime      int64
 	Active         bool

@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"sync"
-	"time"
 )
 
 type Pooler interface {
@@ -50,7 +49,6 @@ func (connPool *ConnHandlerPool) getConn() (*ConnHandler, error) {
 		return nil, nil
 	}
 	conn := connPool.conns[len(connPool.conns)-1]
-	close(conn.HbChan)
 	connPool.conns = connPool.conns[:len(connPool.conns)-1]
 	if connPool.Pooler.IsActive(conn) {
 		log.Println("get connection from pool: ", conn)
@@ -70,32 +68,5 @@ func (connPool *ConnHandlerPool) Return(conn *ConnHandler) {
 		connPool.conns = connPool.conns[:len(connPool.conns)+1]
 		connPool.conns[len(connPool.conns)-1] = conn
 		log.Println("return connection:", conn, ", poolsize is ", len(connPool.conns))
-		connPool.startHeartbeat(conn)
 	}
-}
-
-func (connPool *ConnHandlerPool) startHeartbeat(conn *ConnHandler) {
-	log.Println("start proxy connection heartbeat:", conn)
-	if time.Now().Unix()-conn.WriteTime > HEARTBEAT_INTERVAL {
-		msg := Message{Type: TYPE_HEARTBEAT}
-		conn.Write(msg)
-	}
-	conn.HbChan = make(chan struct{})
-	go func() {
-		for {
-			select {
-			case <-time.After(time.Second * HEARTBEAT_INTERVAL):
-				if time.Now().Unix()-conn.ReadTime >= 2*HEARTBEAT_INTERVAL {
-					log.Println("proxy connection timeout:", conn)
-					conn.conn.Close()
-					return
-				}
-				msg := Message{Type: TYPE_HEARTBEAT}
-				conn.Write(msg)
-			case <-conn.HbChan:
-				log.Println("stop proxy connection heartbeat:", conn)
-				return
-			}
-		}
-	}()
 }
