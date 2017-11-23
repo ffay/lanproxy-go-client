@@ -39,6 +39,8 @@ func (connHandler *ConnHandler) Listen(conn net.Conn, messageHandler interface{}
 	connHandler.conn = conn
 	connHandler.messageHandler = messageHandler.(MessageHandler)
 	connHandler.Active = true
+	connHandler.ReadTime = time.Now().Unix()
+	connHandler.WriteTime = connHandler.ReadTime
 	connHandler.messageHandler.ConnSuccess(connHandler)
 	for {
 		buf := make([]byte, 1024*8)

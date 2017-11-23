@@ -263,6 +263,8 @@ func (messageHandler *LPMessageHandler) ConnError(connHandler *ConnHandler) {
 	if messageHandler.die != nil {
 		close(messageHandler.die)
 	}
+	connHandler.messageHandler = nil
+	messageHandler.connHandler = nil
 	time.Sleep(time.Second * 3)
 }
 
@@ -274,7 +276,7 @@ func (messageHandler *LPMessageHandler) startHeartbeat() {
 			select {
 			case <-time.After(time.Second * HEARTBEAT_INTERVAL):
 				if time.Now().Unix()-messageHandler.connHandler.ReadTime >= 2*HEARTBEAT_INTERVAL {
-					log.Println("proxy connection timeout:", messageHandler.connHandler)
+					log.Println("proxy connection timeout:", messageHandler.connHandler, time.Now().Unix()-messageHandler.connHandler.ReadTime)
 					messageHandler.connHandler.conn.Close()
 					return
 				}
