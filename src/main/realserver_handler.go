@@ -59,6 +59,8 @@ func (messageHandler *RealServerMessageHandler) ConnError(connHandler *ConnHandl
 		conn.Write(message)
 		conn.NextConn = nil
 	}
+
+	connHandler.messageHandler = nil
 }
 
 func (messageHandler *RealServerMessageHandler) ConnFailed() {

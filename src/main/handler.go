@@ -83,7 +83,9 @@ func (connHandler *ConnHandler) Listen(conn net.Conn, messageHandler interface{}
 }
 
 func (connHandler *ConnHandler) Write(msg interface{}) {
-	buf := connHandler.messageHandler.Encode(msg)
-	connHandler.WriteTime = time.Now().Unix()
-	connHandler.conn.Write(buf)
+	if connHandler.messageHandler != nil {
+		buf := connHandler.messageHandler.Encode(msg)
+		connHandler.WriteTime = time.Now().Unix()
+		connHandler.conn.Write(buf)
+	}
 }

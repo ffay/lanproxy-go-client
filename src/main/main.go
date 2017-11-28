@@ -263,6 +263,13 @@ func (messageHandler *LPMessageHandler) ConnError(connHandler *ConnHandler) {
 	if messageHandler.die != nil {
 		close(messageHandler.die)
 	}
+
+	if connHandler.NextConn != nil {
+		connHandler.NextConn.NextConn = nil
+		connHandler.NextConn.conn.Close()
+		connHandler.NextConn = nil
+	}
+
 	connHandler.messageHandler = nil
 	messageHandler.connHandler = nil
 	time.Sleep(time.Second * 3)
