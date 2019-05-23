@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
+	"runtime/debug"
 	"os"
 	"strconv"
 	"time"
@@ -279,11 +280,17 @@ func (messageHandler *LPMessageHandler) startHeartbeat() {
 	log.Println("start heartbeat:", messageHandler.connHandler)
 	messageHandler.die = make(chan struct{})
 	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Printf("run time panic: %v", err)
+				debug.PrintStack()
+			}
+		}()
 		for {
 			select {
 			case <-time.After(time.Second * HEARTBEAT_INTERVAL):
-				if time.Now().Unix()-messageHandler.connHandler.ReadTime >= 2*HEARTBEAT_INTERVAL {
-					log.Println("proxy connection timeout:", messageHandler.connHandler, time.Now().Unix()-messageHandler.connHandler.ReadTime)
+				if time.Now().Unix() - messageHandler.connHandler.ReadTime >= 2*HEARTBEAT_INTERVAL {
+					log.Println("proxy connection timeout:", messageHandler.connHandler, time.Now().Unix() - messageHandler.connHandler.ReadTime)
 					messageHandler.connHandler.conn.Close()
 					return
 				}
