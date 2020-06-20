@@ -70,25 +70,25 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "lanproxy"
 	app.Flags = []cli.Flag{
-		cli.StringFlag{
+		&cli.StringFlag{
 			Name:  "k",
 			Value: "",
 			Usage: "client key",
 		},
-		cli.StringFlag{
+		&cli.StringFlag{
 			Name:  "s",
 			Value: "",
 			Usage: "proxy server host",
 		},
-		cli.IntFlag{
+		&cli.IntFlag{
 			Name:  "p",
 			Value: 4900,
 			Usage: "proxy server port",
-		}, cli.StringFlag{
+		}, &cli.StringFlag{
 			Name:  "ssl",
 			Value: "false",
 			Usage: "enable ssl",
-		}, cli.StringFlag{
+		}, &cli.StringFlag{
 			Name:  "cer",
 			Value: "",
 			Usage: "ssl cert path, default skip verify certificate",
