@@ -54,6 +54,9 @@ func (connPool *ConnHandlerPool) getConn() (*ConnHandler, error) {
 		log.Println("get connection from pool: ", conn)
 		return conn, nil
 	} else {
+		// Clean up inactive connection to prevent resource leaks
+		log.Println("cleaning up inactive connection: ", conn)
+		connPool.Pooler.Remove(conn)
 		return nil, nil
 	}
 }
@@ -65,8 +68,27 @@ func (connPool *ConnHandlerPool) Return(conn *ConnHandler) {
 		log.Println("pool is full, remove connection: ", conn)
 		connPool.Pooler.Remove(conn)
 	} else {
-		connPool.conns = connPool.conns[:len(connPool.conns)+1]
-		connPool.conns[len(connPool.conns)-1] = conn
-		log.Println("return connection:", conn, ", poolsize is ", len(connPool.conns))
+		// Ensure connection is still active before returning to pool
+		if connPool.Pooler.IsActive(conn) {
+			connPool.conns = append(connPool.conns, conn)
+			log.Println("return connection:", conn, ", poolsize is ", len(connPool.conns))
+		} else {
+			log.Println("connection is no longer active, removing: ", conn)
+			connPool.Pooler.Remove(conn)
+		}
 	}
+}
+
+// Close gracefully closes all connections in the pool
+func (connPool *ConnHandlerPool) Close() {
+	connPool.mu.Lock()
+	defer connPool.mu.Unlock()
+
+	log.Printf("Closing connection pool with %d connections", len(connPool.conns))
+	for _, conn := range connPool.conns {
+		if conn != nil {
+			connPool.Pooler.Remove(conn)
+		}
+	}
+	connPool.conns = nil
 }

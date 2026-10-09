@@ -51,6 +51,8 @@ type LPMessageHandler struct {
 	connHandler *ConnHandler
 	clientKey   string
 	die         chan struct{}
+	serverAddr  string
+	tlsConfig   *tls.Config
 }
 
 type Message struct {
@@ -92,9 +94,29 @@ func main() {
 			Name:  "cer",
 			Value: "",
 			Usage: "ssl cert path, default skip verify certificate",
+		}, &cli.BoolFlag{
+			Name:  "disable-connection-pool",
+			Usage: "disable connection pool (enabled by default)",
+		}, &cli.StringFlag{
+			Name:  "log-file",
+			Value: "",
+			Usage: "log file path (optional, logs to stdout if not specified)",
 		}}
 	app.Usage = "help you expose a local server behind a NAT or firewall to the internet"
 	app.Action = func(c *cli.Context) error {
+		// Setup logging to file if specified
+		logFile := c.String("log-file")
+		if logFile != "" {
+			f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err != nil {
+				log.Printf("Failed to open log file: %v, using stdout", err)
+			} else {
+				log.SetOutput(f)
+				log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+				log.Println("Logging to file:", logFile)
+			}
+		}
+
 		if c.String("s") == "" {
 			log.Println("server ip addr is required, use -s")
 			log.Println("exit")
@@ -135,27 +157,36 @@ func main() {
 				conf.ClientCAs = certPool
 			}
 		}
-		start(c.String("k"), c.String("s"), c.Int("p"), conf)
+		disableConnPool := c.Bool("disable-connection-pool")
+		start(c.String("k"), c.String("s"), c.Int("p"), conf, disableConnPool)
 		return nil
 	}
 
 	app.Run(os.Args)
 }
 
-func start(key string, ip string, port int, conf *tls.Config) {
-	connPool := &ConnHandlerPool{Size: 100, Pooler: &ProxyConnPooler{addr: ip + ":" + strconv.Itoa(port), conf: conf}}
-	connPool.Init()
-	connHandler := &ConnHandler{}
+func start(key string, ip string, port int, conf *tls.Config, disableConnPool bool) {
+	var connPool *ConnHandlerPool
+	if !disableConnPool {
+		connPool = &ConnHandlerPool{Size: 100, Pooler: &ProxyConnPooler{addr: ip + ":" + strconv.Itoa(port), conf: conf}}
+		connPool.Init()
+	}
 	for {
-		//cmd connection
+		//cmd connection - create new connHandler for each connection to avoid state pollution
+		connHandler := &ConnHandler{}
 		conn := connect(key, ip, port, conf)
 		connHandler.conn = conn
-		messageHandler := LPMessageHandler{connPool: connPool}
-		messageHandler.connHandler = connHandler
-		messageHandler.clientKey = key
+		messageHandler := LPMessageHandler{
+			connPool:    connPool,
+			connHandler: connHandler,
+			clientKey:   key,
+			serverAddr:  ip + ":" + strconv.Itoa(port),
+			tlsConfig:   conf,
+		}
 		messageHandler.startHeartbeat()
 		log.Println("start listen cmd message:", messageHandler)
 		connHandler.Listen(conn, &messageHandler)
+		log.Println("connection closed, reconnecting...")
 	}
 }
 
@@ -223,7 +254,14 @@ func (messageHandler *LPMessageHandler) MessageReceived(connHandler *ConnHandler
 		go func() {
 			log.Println("received connect message:", message.Uri, "=>", string(message.Data))
 			addr := string(message.Data)
-			realServerMessageHandler := &RealServerMessageHandler{LpConnHandler: connHandler, ConnPool: messageHandler.connPool, UserId: message.Uri, ClientKey: messageHandler.clientKey}
+			realServerMessageHandler := &RealServerMessageHandler{
+				LpConnHandler: connHandler,
+				ConnPool:      messageHandler.connPool,
+				UserId:        message.Uri,
+				ClientKey:     messageHandler.clientKey,
+				ServerAddr:    messageHandler.serverAddr,
+				TLSConfig:     messageHandler.tlsConfig,
+			}
 			conn, err := net.Dial("tcp", addr)
 			if err != nil {
 				log.Println("connect realserver failed", err)
@@ -244,8 +282,12 @@ func (messageHandler *LPMessageHandler) MessageReceived(connHandler *ConnHandler
 			connHandler.NextConn.conn.Close()
 			connHandler.NextConn = nil
 		}
-		if messageHandler.clientKey == "" {
+		// Only return connection to pool if connection pool exists and clientKey is empty
+		if messageHandler.connPool != nil && messageHandler.clientKey == "" {
 			messageHandler.connPool.Return(connHandler)
+		} else if messageHandler.connPool == nil && connHandler.conn != nil {
+			// For direct connections, just close the connection
+			connHandler.conn.Close()
 		}
 	}
 }
@@ -331,7 +373,9 @@ func (pooler *ProxyConnPooler) Create(pool *ConnHandlerPool) (*ConnHandler, erro
 }
 
 func (pooler *ProxyConnPooler) Remove(conn *ConnHandler) {
-	conn.conn.Close()
+	if conn != nil && conn.conn != nil {
+		conn.conn.Close()
+	}
 }
 
 func (pooler *ProxyConnPooler) IsActive(conn *ConnHandler) bool {

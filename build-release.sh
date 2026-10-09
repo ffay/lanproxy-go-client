@@ -23,17 +23,46 @@ OSES=(linux darwin windows freebsd)
 ARCHS=(amd64 386)
 for os in ${OSES[@]}; do
 	for arch in ${ARCHS[@]}; do
+		# Skip darwin/386 as it's no longer supported in newer Go versions
+		if [ "$os" == "darwin" ] && [ "$arch" == "386" ]; then
+			continue
+		fi
 		suffix=""
+		ldflags="$LDFLAGS"
 		if [ "$os" == "windows" ]
 		then
 			suffix=".exe"
+			# Use -H windowsgui to prevent console window popup when running as subprocess
+			ldflags="$ldflags -H windowsgui"
 		fi
-		env CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -ldflags "$LDFLAGS" -gcflags "$GCFLAGS" -o client_${os}_${arch}${suffix} ./src/main
+		env CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -ldflags "$ldflags" -gcflags "$GCFLAGS" -o client_${os}_${arch}${suffix} ./src/main
 		if $UPX; then upx -9 client_${os}_${arch}${suffix};fi
 		tar -zcf lanproxy-client-${os}-${arch}-$VERSION.tar.gz client_${os}_${arch}${suffix}
 		$sum lanproxy-client-${os}-${arch}-$VERSION.tar.gz
 	done
 done
+
+# Build for Linux ARM64 (aarch64)
+env CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -gcflags "$GCFLAGS" -o client_linux_arm64 ./src/main
+if $UPX; then upx -9 client_linux_arm64;fi
+tar -zcf lanproxy-client-linux-arm64-$VERSION.tar.gz client_linux_arm64
+$sum lanproxy-client-linux-arm64-$VERSION.tar.gz
+
+# Build for Apple Silicon (darwin arm64)
+env CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -gcflags "$GCFLAGS" -o client_darwin_arm64 ./src/main
+if $UPX; then upx -9 client_darwin_arm64;fi
+tar -zcf lanproxy-client-darwin-arm64-$VERSION.tar.gz client_darwin_arm64
+$sum lanproxy-client-darwin-arm64-$VERSION.tar.gz
+
+# Create universal binary for macOS (amd64 + arm64)
+# Need to rebuild uncompressed versions for lipo
+env CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -gcflags "$GCFLAGS" -o client_darwin_amd64_universal ./src/main
+env CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -gcflags "$GCFLAGS" -o client_darwin_arm64_universal ./src/main
+lipo -create -output client_darwin_universal client_darwin_amd64_universal client_darwin_arm64_universal
+if $UPX; then upx -9 client_darwin_universal;fi
+tar -zcf lanproxy-client-darwin-universal-$VERSION.tar.gz client_darwin_universal
+$sum lanproxy-client-darwin-universal-$VERSION.tar.gz
+rm -f client_darwin_amd64_universal client_darwin_arm64_universal
 
 # ARM
 ARMS=(5 6 7)
